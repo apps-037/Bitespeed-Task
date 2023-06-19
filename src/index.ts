@@ -65,10 +65,38 @@ app.post('/identify', (req: Request, res: Response) => {
           consolidatedContact.contact.phoneNumbers.push(primaryContact.phoneNumber);
         }
 
-      }
+        // Query the database to fetch secondary contacts
+        connection.query(
+          'SELECT * FROM Contact WHERE linkedId = ?',
+          [primaryContact.id],
+          (error, secondaryResults) => {
+            if (error) {
+              console.error('Error fetching secondary contacts:', error);
+              res.sendStatus(500);
+              return;
+            }
+            // Add secondary contact data to the response 
+            secondaryResults.forEach((secondaryContact: any) => {
+              consolidatedContact.contact.secondaryContactIds.push(secondaryContact.id);
 
-      // Send the consolidated contact data
-      res.status(200).json(consolidatedContact);
+              // Add secondary contact email
+              if (secondaryContact.email && !consolidatedContact.contact.emails.includes(secondaryContact.email)
+              ) {
+                consolidatedContact.contact.emails.push(secondaryContact.email);
+              }
+              // Add secondary contact phone number 
+              if (secondaryContact.phoneNumber && !consolidatedContact.contact.phoneNumbers.includes(secondaryContact.phoneNumber)
+              ) {
+                consolidatedContact.contact.phoneNumbers.push(secondaryContact.phoneNumber);
+              }
+            });
+
+
+            // Send the consolidated contact data
+            res.status(200).json(consolidatedContact);
+
+          });
+      }
 
     });
 
