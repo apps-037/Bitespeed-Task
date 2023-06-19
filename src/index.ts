@@ -7,7 +7,7 @@ interface Contact {
   phoneNumber?: string;
 }
 
-interface ConsolidatedContact {
+interface ConsolidatedContact {      //final response format
   contact: {
     primaryContactId: number;
     emails: string[];
@@ -29,6 +29,14 @@ app.use(bodyParser.json());
 app.post('/identify', (req: Request, res: Response) => {
 
   const contact: Contact = req.body;
+  const consolidatedContact: ConsolidatedContact = {
+    contact: {
+      primaryContactId: 0,
+      emails: [],
+      phoneNumbers: [],
+      secondaryContactIds: [],
+    },
+  };
 
   // Query the database to fetch primary contacts
   connection.query(
@@ -41,7 +49,26 @@ app.post('/identify', (req: Request, res: Response) => {
         return;
       }
 
-    console.log("Print the results", results);
+      if (results.length > 0) {
+        const primaryContact = results[0];
+
+        // Populate primary contact data
+        consolidatedContact.contact.primaryContactId = primaryContact.id;
+
+        // Add primary contact email if not already present
+        if (!consolidatedContact.contact.emails.includes(primaryContact.email)) {
+          consolidatedContact.contact.emails.push(primaryContact.email);
+        }
+
+        // Add primary contact phone number if not already present
+        if (!consolidatedContact.contact.phoneNumbers.includes(primaryContact.phoneNumber)) {
+          consolidatedContact.contact.phoneNumbers.push(primaryContact.phoneNumber);
+        }
+
+      }
+
+      // Send the consolidated contact data
+      res.status(200).json(consolidatedContact);
 
     });
 
