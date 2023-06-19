@@ -96,6 +96,27 @@ app.post('/identify', (req: Request, res: Response) => {
             res.status(200).json(consolidatedContact);
 
           });
+      }else {
+        // Create a new primary contact if no matching contact found 
+        const newContact = {
+          email: contact.email,
+          phoneNumber: contact.phoneNumber,
+          linkPrecedence: 'primary',
+        };
+
+        connection.query('INSERT INTO Contact SET ?', newContact, (error, result) => {
+          if (error) {
+            console.error('Error creating new primary contact:', error);
+            res.sendStatus(500);
+            return;
+          }
+
+          const newPrimaryContactId = result.insertId;
+          consolidatedContact.contact.primaryContactId = newPrimaryContactId;
+
+          // Send the consolidated contact data
+          res.status(200).json(consolidatedContact);
+        });
       }
 
     });
