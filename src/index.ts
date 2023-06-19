@@ -38,6 +38,60 @@ app.post('/identify', (req: Request, res: Response) => {
     },
   };
 
+  // Here the primary gets converted to secondary
+  connection.query(
+    'SELECT * FROM Contact WHERE email = ? OR phoneNumber = ?',
+    [contact.email, contact.phoneNumber],
+    (error, results) => {
+      if (error) {
+        console.error('Error fetching primary contacts:', error);
+        res.sendStatus(500);
+        return;
+      }
+
+      if (results.length > 0) {
+        // Check if any primary contact shares the same information
+        const sharedPrimaryContacts = results.filter(
+          (primaryContact: any) => primaryContact.linkPrecedence === 'primary'
+        );
+
+        if (sharedPrimaryContacts.length > 1) {
+          // Sort primary contacts by creation date in ascending order
+          sharedPrimaryContacts.sort(
+            (a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+
+          // Update the latest primary contact to secondary
+          const latestPrimaryContact = sharedPrimaryContacts.pop();
+          connection.query(
+            'UPDATE Contact SET linkPrecedence = ?, updatedAt = ? WHERE id = ?',
+            ['secondary', new Date(), latestPrimaryContact.id],
+            (error) => {
+              if (error) {
+                console.error('Error updating latest primary contact:', error);
+                res.sendStatus(500);
+                return;
+              }
+            }
+          );
+
+          // Set linkedId as the oldest primary contact ID
+          const oldestPrimaryContact = sharedPrimaryContacts[0];
+          connection.query(
+            'UPDATE Contact SET linkedId = ? WHERE id = ?',
+            [oldestPrimaryContact.id, latestPrimaryContact.id],
+            (error) => {
+              if (error) {
+                console.error('Error updating linkedId for secondary contact:', error);
+                res.sendStatus(500);
+                return;
+              }
+            }
+          );
+        }
+      }
+    });
+
   // Query the database to fetch primary contacts
   connection.query(
     'SELECT * FROM Contact WHERE email = ? OR phoneNumber = ?',
@@ -124,7 +178,7 @@ app.post('/identify', (req: Request, res: Response) => {
               res.status(200).json(consolidatedContact);
             }
           });
-      }else {
+      } else {
         // Create a new primary contact if no matching contact found 
         const newContact = {
           email: contact.email,
