@@ -91,10 +91,38 @@ app.post('/identify', (req: Request, res: Response) => {
               }
             });
 
+            // Check if incoming request contains new information
+            const hasNewInfo =
+              (contact.email && !consolidatedContact.contact.emails.includes(contact.email)) ||
+              (contact.phoneNumber &&
+                !consolidatedContact.contact.phoneNumbers.includes(contact.phoneNumber));
 
-            // Send the consolidated contact data
-            res.status(200).json(consolidatedContact);
+            if (hasNewInfo) {
+              // Create a new secondary contact
+              const newContact = {
+                email: contact.email,
+                phoneNumber: contact.phoneNumber,
+                linkPrecedence: 'secondary',
+                linkedId: primaryContact.id,
+              };
 
+              connection.query('INSERT INTO Contact SET ?', newContact, (error, result) => {
+                if (error) {
+                  console.error('Error creating new secondary contact:', error);
+                  res.sendStatus(500);
+                  return;
+                }
+
+                const newSecondaryContactId = result.insertId;
+                consolidatedContact.contact.secondaryContactIds.push(newSecondaryContactId);
+
+                // Send the consolidated contact data
+                res.status(200).json(consolidatedContact);
+              });
+            } else {
+              // Send the consolidated contact data without creating a new secondary contact
+              res.status(200).json(consolidatedContact);
+            }
           });
       }else {
         // Create a new primary contact if no matching contact found 
