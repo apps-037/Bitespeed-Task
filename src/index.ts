@@ -1,13 +1,14 @@
 import express, { Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import mysql from 'mysql';
+import { Console } from 'console';
 
 interface Contact {
   email?: string;
   phoneNumber?: string;
 }
 
-interface ConsolidatedContact {      //final response format
+interface ConsolidatedContact {
   contact: {
     primaryContactId: number;
     emails: string[];
@@ -23,11 +24,12 @@ const connection = mysql.createConnection({
   database: 'Contact',
 });
 
+console.log("print conn", connection);
+
 const app = express();
 app.use(bodyParser.json());
 
 app.post('/identify', (req: Request, res: Response) => {
-
   const contact: Contact = req.body;
   const consolidatedContact: ConsolidatedContact = {
     contact: {
@@ -36,6 +38,11 @@ app.post('/identify', (req: Request, res: Response) => {
       phoneNumbers: [],
       secondaryContactIds: [],
     },
+  };
+
+  // Helper function to send the consolidated contact data
+  const sendConsolidatedContact = () => {
+    res.status(200).json(consolidatedContact);
   };
 
   // Here the primary gets converted to secondary
@@ -89,21 +96,7 @@ app.post('/identify', (req: Request, res: Response) => {
             }
           );
         }
-      }
-    });
 
-  // Query the database to fetch primary contacts
-  connection.query(
-    'SELECT * FROM Contact WHERE email = ? OR phoneNumber = ?',
-    [contact.email, contact.phoneNumber],
-    (error, results) => {
-      if (error) {
-        console.error('Error fetching primary contacts:', error);
-        res.sendStatus(500);
-        return;
-      }
-
-      if (results.length > 0) {
         const primaryContact = results[0];
 
         // Populate primary contact data
@@ -129,18 +122,18 @@ app.post('/identify', (req: Request, res: Response) => {
               res.sendStatus(500);
               return;
             }
-            // Add secondary contact data to the response 
+
+            // Add secondary contact data to the response
             secondaryResults.forEach((secondaryContact: any) => {
               consolidatedContact.contact.secondaryContactIds.push(secondaryContact.id);
 
               // Add secondary contact email
-              if (secondaryContact.email && !consolidatedContact.contact.emails.includes(secondaryContact.email)
-              ) {
+              if (secondaryContact.email && !consolidatedContact.contact.emails.includes(secondaryContact.email)) {
                 consolidatedContact.contact.emails.push(secondaryContact.email);
               }
-              // Add secondary contact phone number 
-              if (secondaryContact.phoneNumber && !consolidatedContact.contact.phoneNumbers.includes(secondaryContact.phoneNumber)
-              ) {
+
+              // Add secondary contact phone number
+              if (secondaryContact.phoneNumber && !consolidatedContact.contact.phoneNumbers.includes(secondaryContact.phoneNumber)) {
                 consolidatedContact.contact.phoneNumbers.push(secondaryContact.phoneNumber);
               }
             });
@@ -148,8 +141,7 @@ app.post('/identify', (req: Request, res: Response) => {
             // Check if incoming request contains new information
             const hasNewInfo =
               (contact.email && !consolidatedContact.contact.emails.includes(contact.email)) ||
-              (contact.phoneNumber &&
-                !consolidatedContact.contact.phoneNumbers.includes(contact.phoneNumber));
+              (contact.phoneNumber && !consolidatedContact.contact.phoneNumbers.includes(contact.phoneNumber));
 
             if (hasNewInfo) {
               // Create a new secondary contact
@@ -171,15 +163,16 @@ app.post('/identify', (req: Request, res: Response) => {
                 consolidatedContact.contact.secondaryContactIds.push(newSecondaryContactId);
 
                 // Send the consolidated contact data
-                res.status(200).json(consolidatedContact);
+                sendConsolidatedContact();
               });
             } else {
               // Send the consolidated contact data without creating a new secondary contact
-              res.status(200).json(consolidatedContact);
+              sendConsolidatedContact();
             }
-          });
+          }
+        );
       } else {
-        // Create a new primary contact if no matching contact found 
+        // Create a new primary contact if no matching contact found
         const newContact = {
           email: contact.email,
           phoneNumber: contact.phoneNumber,
@@ -197,12 +190,11 @@ app.post('/identify', (req: Request, res: Response) => {
           consolidatedContact.contact.primaryContactId = newPrimaryContactId;
 
           // Send the consolidated contact data
-          res.status(200).json(consolidatedContact);
+          sendConsolidatedContact();
         });
       }
-
-    });
-
+    }
+  );
 });
 
 const port = 3000;
